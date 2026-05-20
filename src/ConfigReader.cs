@@ -1,25 +1,28 @@
+using System;
+using System.IO;
+using System.Text.Json;
+using System.Threading.Tasks;
+
 namespace GitSync;
 
-public interface IConfigReader
-{
-    Task<ConfigSettings> ReadConfig();
-}
-
-public class ConfigReader : IConfigReader
+public class ConfigReader
 {
     public async Task<ConfigSettings> ReadConfig()
     {
-        var cfg = new ConfigSettings
-        {
-            LogLevel = "Debug",
-            RemoteBranchTemplate = "%owner%/%reponame%/%branchname%",
-            RemoteUrls = new()
-            {
-                { "gitlab", "git@gitlab.com:loktionov129/gitsync.git" },
-                { "gitverse", "git@gitverse.ru:loktionov129/gitsync.git" },
-            },
-        };
+        var configPath = Environment.GetEnvironmentVariable("GITSYNC_CONFIG_PATH");
 
-        return cfg;
-    }    
+        if (string.IsNullOrWhiteSpace(configPath))
+        {
+            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            configPath = Path.Combine(home, ".gitsync", "config.json");
+        }
+
+        if (!File.Exists(configPath))
+            throw new FileNotFoundException($"Config file not found: {configPath}");
+
+        var json = await File.ReadAllTextAsync(configPath);
+        var cfg = JsonSerializer.Deserialize<ConfigSettings>(json);
+
+        return cfg ?? throw new InvalidOperationException("Failed to deserialize config.");
+    }
 }
