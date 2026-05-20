@@ -1,4 +1,4 @@
-namespace GitSync;
+namespace GitSync.Configuration;
 
 public class ConfigSettings
 {

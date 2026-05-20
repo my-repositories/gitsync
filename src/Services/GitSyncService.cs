@@ -1,7 +1,8 @@
-using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 
-namespace GitSync;
+using GitSync.Configuration;
+
+namespace GitSync.Services;
 
 public interface IGitSyncService
 {
@@ -27,15 +28,26 @@ public sealed class GitSyncService : IGitSyncService
 
         _logger.LogInformation("Start syncing");
 
+        var refspec = await BuildRefspecAsync();
+        await EnsureRemotesAsync();
+
+        var results = await PushAllAsync(refspec);
+        LogSummary(results);
+    }
+
+    private async Task EnsureRemotesAsync()
+    {
         foreach (var remote in _cfg.RemoteUrls)
         {
             await EnsureRemoteAsync(remote.Key, remote.Value);
         }
+    }
 
-        var refspec = await BuildRefspecAsync();
-        var results = await Task.WhenAll(
-            _cfg.RemoteUrls.Select(remote => PushRemoteAsync(remote, refspec))
-        );
+    private Task<(string Name, bool Success)[]> PushAllAsync(string refspec)
+        => Task.WhenAll(_cfg.RemoteUrls.Select(remote => PushRemoteAsync(remote, refspec)));
+
+    private void LogSummary((string Name, bool Success)[] results)
+    {
         var success = results.Count(r => r.Success);
         var error = results.Length - success;
 
@@ -96,9 +108,7 @@ public sealed class GitSyncService : IGitSyncService
         {
             return await _processRunner.RunAsync("git", $"remote get-url {remoteName}");
         }
-        catch (InvalidOperationException ex) when (
-            ex.Message.Contains("No such remote", StringComparison.OrdinalIgnoreCase)
-        )
+        catch (InvalidOperationException ex) when (ex.Message.Contains("No such remote", StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }

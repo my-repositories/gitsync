@@ -1,5 +1,7 @@
 using System.Diagnostics;
 
+namespace GitSync.Services;
+
 public interface IProcessRunner
 {
     Task<string> RunAsync(string fileName, string arguments);

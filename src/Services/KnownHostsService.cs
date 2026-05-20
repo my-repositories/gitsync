@@ -1,7 +1,9 @@
 using System.Text;
 using Microsoft.Extensions.Logging;
 
-namespace GitSync;
+using GitSync.Configuration;
+
+namespace GitSync.Services;
 
 public interface IKnownHostsService
 {

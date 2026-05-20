@@ -1,6 +1,9 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
+using GitSync.Configuration;
+using GitSync.Services;
+
 namespace GitSync;
 
 public class Program

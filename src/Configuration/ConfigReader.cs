@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace GitSync;
+namespace GitSync.Configuration;
 
 public class ConfigReader
 {
