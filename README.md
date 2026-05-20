@@ -1,0 +1,122 @@
+# GitSync
+
+`GitSync` — небольшая CLI-утилита для синхронизации текущей git-ветки в несколько удалённых репозиториев и подготовки SSH `known_hosts`.
+
+[![CI](https://github.com/my-repositories/gitsync/actions/workflows/ci.yml/badge.svg)](https://github.com/my-repositories/gitsync/actions/workflows/ci.yml)
+[![Coverage](https://raw.githubusercontent.com/my-repositories/gitsync/refs/heads/badges/coverage.svg)](https://my-repositories.github.io/gitsync)
+
+## Что делает
+
+- Проверяет, что команда запущена внутри git-репозитория.
+- Читает конфигурацию из файла.
+- При необходимости обновляет `known_hosts` через `ssh-keyscan`.
+- Берёт текущую ветку.
+- Строит целевой `refspec`.
+- Добавляет или обновляет remote URL'ы.
+- Пушит текущую ветку во все указанные remote.
+
+## Установка
+
+Скачай готовый релиз для своей платформы из **GitHub Releases**, распакуй архив и запусти `gitsync`.
+
+### Linux
+
+```bash
+./gitsync
+```
+
+### Windows
+
+```powershell
+gitsync.exe
+```
+
+## Конфигурация
+
+Приложение читает конфиг из файла, путь к которому задаётся переменной окружения `GITSYNC_CONFIG_PATH`.
+
+Если `GITSYNC_CONFIG_PATH` не задана, используется файл:
+
+```text
+~/.gitsync/config.json
+```
+
+Пример `config.json`:
+
+```json
+{
+  "LogLevel": "Information",
+  "SourceRemoteName": "origin",
+  "RemoteBranchTemplate": "%owner%/%reponame%/%branchname%",
+  "RemoteUrls": {
+    "mirror1": "git@github.com:owner/repo.git",
+    "mirror2": "git@gitlab.com:owner/repo.git"
+  }
+}
+```
+
+### Поля конфигурации
+
+- `LogLevel` — минимальный уровень логирования.
+- `SourceRemoteName` — remote, откуда берётся исходный URL репозитория.
+- `RemoteBranchTemplate` — шаблон имени ветки для удалённого репозитория.
+- `RemoteUrls` — список remote, куда будет отправляться push.
+
+## Запуск
+
+Обычный запуск:
+
+```bash
+gitsync
+```
+
+Запуск с указанием пути к конфигу:
+
+```bash
+GITSYNC_CONFIG_PATH=~/my-config.json gitsync
+```
+
+Запуск без обновления `known_hosts`:
+
+```bash
+gitsync --skip-host
+```
+
+## Флаги
+
+- `--skip-host` — пропустить warmup `known_hosts`.
+
+## Поведение при запуске
+
+При обычном запуске приложение выполняет следующие шаги:
+
+1. Читает конфигурацию.
+2. Проверяет, что текущая директория находится внутри git-репозитория.
+3. Обновляет `known_hosts`, если не указан `--skip-host`.
+4. Получает текущую ветку.
+5. Строит целевой `refspec`.
+6. Проверяет и обновляет remote URL'ы.
+7. Пушит текущую ветку во все remote из конфигурации.
+8. Выводит итог по успешным и неуспешным операциям.
+
+## GitHub Releases
+
+Готовые сборки публикуются автоматически при создании тега вида `v*`.
+
+Доступные платформы:
+- Linux `x86_64-unknown-linux-gnu`
+- Windows `x86_64-pc-windows-msvc`
+
+## Примеры проблем
+
+### Конфиг не найден
+
+Если файл конфигурации не найден, приложение завершится с ошибкой и покажет путь, который пыталось открыть.
+
+### Не удалось определить репозиторий
+
+Если команда запущена не внутри git-репозитория, приложение завершится с сообщением о том, что текущая директория не является git-репозиторием.
+
+### Проблемы с SSH
+
+Если `ssh-keyscan` недоступен или хост не отвечает, warmup `known_hosts` может завершиться с ошибкой.
