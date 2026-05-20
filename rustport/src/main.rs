@@ -1,23 +1,17 @@
 mod configuration;
+mod services;
 
 use anyhow::Result;
-use std::process::Command;
+use configuration::config_reader::ConfigReader;
+use services::git_sync_service::GitSyncService;
+use services::process_runner::ProcessRunner;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let output = Command::new("git")
-        .arg("status")
-        .output()
-        .expect("failed to run git status");
+    let cfg = ConfigReader::read_config().await?;
+    let process_runner = ProcessRunner;
+    let gitSyncService = GitSyncService::new(process_runner, cfg);
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    if output.status.success() {
-        println!("{}", stdout);
-    } else {
-        eprintln!("{}", stderr);
-    }
-
+    gitSyncService.run()?;
     Ok(())
 }
