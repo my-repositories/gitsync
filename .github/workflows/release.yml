@@ -1,7 +1,6 @@
 name: release
 
 on:
-  workflow_dispatch:
   push:
     tags:
       - "v*"
@@ -17,11 +16,11 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary_name: gitsync
-            package_ext: tar.gz
+            asset_name: gitsync-linux-amd64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary_name: gitsync.exe
-            package_ext: zip
+            asset_name: gitsync-windows-amd64.exe
 
     runs-on: ${{ matrix.os }}
 
@@ -37,35 +36,17 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Package Linux
-        if: matrix.os == 'ubuntu-latest'
+      - name: Rename binary
         shell: bash
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} dist/gitsync
-          tar -czf gitsync-${{ matrix.target }}.tar.gz -C dist gitsync
+          cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} dist/${{ matrix.asset_name }}
 
-      - name: Package Windows
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "dist/gitsync.exe"
-          Compress-Archive -Path dist/gitsync.exe -DestinationPath "gitsync-${{ matrix.target }}.zip" -Force
-
-      - name: Upload Linux artifact
-        if: matrix.os == 'ubuntu-latest'
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: gitsync-x86_64-unknown-linux-gnu
-          path: gitsync-x86_64-unknown-linux-gnu.tar.gz
-
-      - name: Upload Windows artifact
-        if: matrix.os == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: gitsync-x86_64-pc-windows-msvc
-          path: gitsync-x86_64-pc-windows-msvc.zip
+          name: ${{ matrix.asset_name }}
+          path: dist/${{ matrix.asset_name }}
 
   release:
     needs: build
@@ -75,18 +56,18 @@ jobs:
       - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
-          name: gitsync-x86_64-unknown-linux-gnu
+          name: gitsync-linux-amd64
           path: artifacts/linux
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
-          name: gitsync-x86_64-pc-windows-msvc
+          name: gitsync-windows-amd64.exe
           path: artifacts/windows
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            artifacts/linux/*.tar.gz
-            artifacts/windows/*.zip
+            artifacts/linux/gitsync-linux-amd64
+            artifacts/windows/gitsync-windows-amd64.exe
