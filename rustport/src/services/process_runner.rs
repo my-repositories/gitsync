@@ -4,6 +4,7 @@ pub trait IProcessRunner {
     fn run(&self, file_name: &str, arguments: &[&str]) -> Result<String, String>;
 }
 
+#[derive(Clone, Copy)]
 pub struct ProcessRunner;
 
 impl IProcessRunner for ProcessRunner {
