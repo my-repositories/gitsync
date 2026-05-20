@@ -1,6 +1,6 @@
 # GitSync
 
-`GitSync` — небольшая CLI-утилита на .NET для синхронизации текущей git-ветки в несколько удалённых репозиториев и подготовки SSH `known_hosts`.
+`GitSync` — небольшая CLI-утилита для синхронизации текущей git-ветки в несколько удалённых репозиториев и подготовки SSH `known_hosts`.
 
 ## Что делает
 
@@ -11,6 +11,22 @@
 - Строит целевой `refspec`.
 - Добавляет или обновляет remote URL'ы.
 - Пушит текущую ветку во все указанные remote.
+
+## Установка
+
+Скачай готовый релиз для своей платформы из **GitHub Releases**, распакуй архив и запусти `gitsync` [web:353][web:357].
+
+### Linux
+
+```bash
+./gitsync
+```
+
+### Windows
+
+```powershell
+gitsync.exe
+```
 
 ## Конфигурация
 
@@ -48,19 +64,19 @@
 Обычный запуск:
 
 ```bash
-dotnet run
+gitsync
 ```
 
 Запуск с указанием пути к конфигу:
 
 ```bash
-GITSYNC_CONFIG_PATH=~/my-config.json dotnet run
+GITSYNC_CONFIG_PATH=~/my-config.json gitsync
 ```
 
 Запуск без обновления `known_hosts`:
 
 ```bash
-dotnet run -- --skip-host
+gitsync --skip-host
 ```
 
 ## Флаги
@@ -80,6 +96,13 @@ dotnet run -- --skip-host
 7. Пушит текущую ветку во все remote из конфигурации.
 8. Выводит итог по успешным и неуспешным операциям.
 
+## GitHub Releases
+
+Готовые сборки публикуются автоматически при создании тега вида `v*`.
+
+Доступные платформы:
+- Linux `x86_64-unknown-linux-gnu`
+- Windows `x86_64-pc-windows-msvc`
 
 ## Примеры проблем
 
