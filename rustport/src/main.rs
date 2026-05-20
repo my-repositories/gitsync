@@ -1,11 +1,23 @@
 mod configuration;
 
 use anyhow::Result;
-use configuration::config_reader::ConfigReader;
+use std::process::Command;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cfg = ConfigReader::read_config().await?;
-    println!("{:#?}", cfg);
+    let output = Command::new("git")
+        .arg("status")
+        .output()
+        .expect("failed to run git status");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    if output.status.success() {
+        println!("{}", stdout);
+    } else {
+        eprintln!("{}", stderr);
+    }
+
     Ok(())
 }
