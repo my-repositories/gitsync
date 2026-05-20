@@ -152,9 +152,10 @@ impl<R: IProcessRunner> KnownHostsService<R> {
         }
 
         if let Ok(url) = url::Url::parse(remote_url)
-            && let Some(host) = url.host_str() {
-                return Ok(host.to_string());
-            }
+            && let Some(host) = url.host_str()
+        {
+            return Ok(host.to_string());
+        }
 
         anyhow::bail!("Invalid remote url: {remote_url}");
     }
