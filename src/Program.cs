@@ -27,14 +27,21 @@ public class Program
             .AddSingleton<IKnownHostsService, KnownHostsService>();
     }
 
-    public static async Task Main()
+    public static async Task Main(string[] args)
     {
         var cfg = await new ConfigReader().ReadConfig();
-
         using var sp = ConfigureServices(cfg).BuildServiceProvider();
-        var knownHostsService = sp.GetRequiredService<IKnownHostsService>();
+        var skipHost = args.Any(a =>
+            string.Equals(a, "--skip-host", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(a, "-s", StringComparison.OrdinalIgnoreCase));
+
+        if (!skipHost)
+        {
+            var knownHostsService = sp.GetRequiredService<IKnownHostsService>();
+            await knownHostsService.WarmUpAsync();
+        }
+
         var gitSyncService = sp.GetRequiredService<IGitSyncService>();
-        await knownHostsService.WarmUpAsync();
         await gitSyncService.RunAsync();
     }
 }
