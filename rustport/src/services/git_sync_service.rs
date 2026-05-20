@@ -1,13 +1,8 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Result};
 use log::{debug, info};
-use std::collections::HashSet;
 
 use crate::configuration::config_settings::ConfigSettings;
 use crate::services::process_runner::IProcessRunner;
-
-pub trait IGitSyncService {
-    fn run(&self) -> Result<()>;
-}
 
 pub struct GitSyncService<R: IProcessRunner> {
     process_runner: R,
@@ -66,12 +61,12 @@ impl<R: IProcessRunner> GitSyncService<R> {
         let source_remote_url = self
             .process_runner
             .run("git", &["remote", "get-url", &self.logger_cfg.source_remote_name])
-            .context("Failed to get source remote url")?;
+            .map_err(anyhow::Error::msg)?;
 
         let branch_name = self
             .process_runner
             .run("git", &["branch", "--show-current"])
-            .context("Failed to get current branch name")?;
+            .map_err(anyhow::Error::msg)?;
 
         let remote_branch = Self::build_remote_branch(
             &self.logger_cfg.remote_branch_template,
@@ -85,7 +80,7 @@ impl<R: IProcessRunner> GitSyncService<R> {
     fn push_remote(&self, remote_name: &str, refspec: &str) -> Result<()> {
         self.process_runner
             .run("git", &["push", remote_name, refspec])
-            .with_context(|| format!("{remote_name} failed to sync"))?;
+            .map_err(|e| anyhow!("{remote_name} failed to sync: {e}"))?;
 
         info!("{} push successfully completed", remote_name);
         Ok(())
@@ -99,7 +94,7 @@ impl<R: IProcessRunner> GitSyncService<R> {
                 info!("{} adding remote url...", remote_name);
                 self.process_runner
                     .run("git", &["remote", "add", remote_name, remote_url])
-                    .with_context(|| format!("{remote_name} failed to add remote"))?;
+                    .map_err(|e| anyhow!("{remote_name} failed to add remote: {e}"))?;
                 info!("{} remote url successfully added", remote_name);
             }
             Some(existing) if existing.eq_ignore_ascii_case(remote_url) => {
@@ -109,7 +104,7 @@ impl<R: IProcessRunner> GitSyncService<R> {
                 info!("{} updating remote url...", remote_name);
                 self.process_runner
                     .run("git", &["remote", "set-url", remote_name, remote_url])
-                    .with_context(|| format!("{remote_name} failed to update remote"))?;
+                    .map_err(|e| anyhow!("{remote_name} failed to update remote: {e}"))?;
                 info!("{} remote url successfully updated", remote_name);
             }
         }
@@ -124,18 +119,22 @@ impl<R: IProcessRunner> GitSyncService<R> {
         {
             Ok(url) => Ok(Some(url)),
             Err(err) if err.contains("No such remote") => Ok(None),
-            Err(err) => Err(anyhow::anyhow!(err).context("Failed to get remote url")),
+            Err(err) => Err(anyhow!(err).context("Failed to get remote url")),
         }
     }
 
     fn ensure_inside_git_repo(&self) -> Result<()> {
         self.process_runner
             .run("git", &["rev-parse", "--is-inside-work-tree"])
-            .context("Current directory is not a git repository.")?;
+            .map_err(|e| anyhow!("Current directory is not a git repository: {e}"))?;
         Ok(())
     }
 
-    fn build_remote_branch(template: &str, origin_url: &str, branch_name: &str) -> Result<String> {
+    fn build_remote_branch(
+        template: &str,
+        origin_url: &str,
+        branch_name: &str,
+    ) -> Result<String> {
         let repo_part = if let Some(pos) = origin_url.find(':') {
             &origin_url[pos + 1..]
         } else {
@@ -149,7 +148,7 @@ impl<R: IProcessRunner> GitSyncService<R> {
         let reponame = parts.next().unwrap_or("");
 
         if owner.is_empty() || reponame.is_empty() {
-            anyhow::bail!("Invalid origin url: {origin_url}");
+            return Err(anyhow!("Invalid origin url: {origin_url}"));
         }
 
         Ok(template

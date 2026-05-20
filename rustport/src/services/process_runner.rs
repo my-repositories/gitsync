@@ -1,9 +1,13 @@
 use std::process::Command;
 
+pub trait IProcessRunner {
+    fn run(&self, file_name: &str, arguments: &[&str]) -> Result<String, String>;
+}
+
 pub struct ProcessRunner;
 
-impl ProcessRunner {
-    pub fn run(&self, file_name: &str, arguments: &[&str]) -> Result<String, String> {
+impl IProcessRunner for ProcessRunner {
+    fn run(&self, file_name: &str, arguments: &[&str]) -> Result<String, String> {
         let output = Command::new(file_name)
             .args(arguments)
             .output()

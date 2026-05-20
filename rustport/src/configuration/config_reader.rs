@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
-use std::{env, fs, path::PathBuf};
+use std::{env, path::PathBuf};
+use tokio::fs;
 
 use crate::configuration::config_settings::ConfigSettings;
 
@@ -10,14 +11,18 @@ impl ConfigReader {
         let config_path = Self::get_config_path();
 
         if !config_path.exists() {
-            return Err(anyhow::anyhow!("Config file not found: {}", config_path.display()));
+            return Err(anyhow::anyhow!(
+                "Config file not found: {}",
+                config_path.display()
+            ));
         }
 
         let json = fs::read_to_string(&config_path)
+            .await
             .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
 
-        let cfg: ConfigSettings = serde_json::from_str(&json)
-            .context("Failed to deserialize config")?;
+        let cfg: ConfigSettings =
+            serde_json::from_str(&json).context("Failed to deserialize config")?;
 
         Ok(cfg)
     }
