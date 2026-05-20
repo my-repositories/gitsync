@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use log::{debug, info};
 
 use crate::configuration::config_settings::ConfigSettings;
@@ -60,7 +60,10 @@ impl<R: IProcessRunner> GitSyncService<R> {
     fn build_refspec(&self) -> Result<String> {
         let source_remote_url = self
             .process_runner
-            .run("git", &["remote", "get-url", &self.logger_cfg.source_remote_name])
+            .run(
+                "git",
+                &["remote", "get-url", &self.logger_cfg.source_remote_name],
+            )
             .map_err(anyhow::Error::msg)?;
 
         let branch_name = self
@@ -130,11 +133,7 @@ impl<R: IProcessRunner> GitSyncService<R> {
         Ok(())
     }
 
-    fn build_remote_branch(
-        template: &str,
-        origin_url: &str,
-        branch_name: &str,
-    ) -> Result<String> {
+    fn build_remote_branch(template: &str, origin_url: &str, branch_name: &str) -> Result<String> {
         let repo_part = if let Some(pos) = origin_url.find(':') {
             &origin_url[pos + 1..]
         } else {
@@ -155,5 +154,127 @@ impl<R: IProcessRunner> GitSyncService<R> {
             .replace("%owner%", owner)
             .replace("%reponame%", reponame)
             .replace("%branchname%", branch_name))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::RefCell;
+    use std::collections::VecDeque;
+
+    struct FakeRunner {
+        calls: RefCell<Vec<(String, Vec<String>)>>,
+        responses: RefCell<VecDeque<Result<String, String>>>,
+    }
+
+    impl FakeRunner {
+        fn new(responses: Vec<Result<&str, &str>>) -> Self {
+            Self {
+                calls: RefCell::new(Vec::new()),
+                responses: RefCell::new(
+                    responses
+                        .into_iter()
+                        .map(|r| r.map(|s| s.to_string()).map_err(|e| e.to_string()))
+                        .collect(),
+                ),
+            }
+        }
+    }
+
+    impl IProcessRunner for FakeRunner {
+        fn run(&self, file_name: &str, arguments: &[&str]) -> Result<String, String> {
+            self.calls.borrow_mut().push((
+                file_name.to_string(),
+                arguments.iter().map(|s| s.to_string()).collect(),
+            ));
+
+            self.responses
+                .borrow_mut()
+                .pop_front()
+                .unwrap_or_else(|| Err("unexpected call".to_string()))
+        }
+    }
+
+    fn cfg() -> ConfigSettings {
+        ConfigSettings {
+            log_level: "Information".to_string(),
+            source_remote_name: "origin".to_string(),
+            remote_branch_template: "%owner%/%reponame%/%branchname%".to_string(),
+            remote_urls: std::collections::HashMap::from([(
+                "mirror1".to_string(),
+                "git@github.com:owner/repo.git".to_string(),
+            )]),
+        }
+    }
+
+    #[test]
+    fn build_remote_branch_works() {
+        let out = GitSyncService::<FakeRunner>::build_remote_branch(
+            "%owner%/%reponame%/%branchname%",
+            "git@github.com:alice/project.git",
+            "main",
+        )
+        .unwrap();
+
+        assert_eq!(out, "alice/project/main");
+    }
+
+    #[test]
+    fn build_remote_branch_rejects_invalid_url() {
+        let err = GitSyncService::<FakeRunner>::build_remote_branch(
+            "%owner%/%reponame%/%branchname%",
+            "invalid",
+            "main",
+        )
+        .unwrap_err()
+        .to_string();
+
+        assert!(err.contains("Invalid origin url"));
+    }
+
+    #[test]
+    fn ensure_inside_git_repo_fails_when_git_says_no() {
+        let runner = FakeRunner::new(vec![Err("not a repo")]);
+        let svc = GitSyncService::new(runner, cfg());
+
+        let err = svc.ensure_inside_git_repo().unwrap_err().to_string();
+        assert!(err.contains("Current directory is not a git repository"));
+    }
+
+    #[test]
+    fn ensure_remote_adds_missing_remote() {
+        let runner = FakeRunner::new(vec![Err("No such remote"), Ok("")]);
+        let svc = GitSyncService::new(runner, cfg());
+
+        svc.ensure_remote("mirror1", "git@github.com:owner/repo.git")
+            .unwrap();
+    }
+
+    #[test]
+    fn ensure_remote_updates_different_url() {
+        let runner = FakeRunner::new(vec![Ok("git@github.com:old/repo.git"), Ok("")]);
+        let svc = GitSyncService::new(runner, cfg());
+
+        svc.ensure_remote("mirror1", "git@github.com:owner/repo.git")
+            .unwrap();
+    }
+
+    #[test]
+    fn push_remote_runs_git_push() {
+        let runner = FakeRunner::new(vec![Ok("")]);
+        let svc = GitSyncService::new(runner, cfg());
+
+        svc.push_remote("mirror1", "main:alice/project/main")
+            .unwrap();
+    }
+
+    #[test]
+    fn try_get_remote_url_returns_none_for_missing_remote() {
+        let runner = FakeRunner::new(vec![Err("No such remote")]);
+        let svc = GitSyncService::new(runner, cfg());
+
+        let url = svc.try_get_remote_url("mirror1").unwrap();
+        assert!(url.is_none());
     }
 }

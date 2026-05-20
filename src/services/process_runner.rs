@@ -24,3 +24,29 @@ impl IProcessRunner for ProcessRunner {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn returns_stdout_on_success() {
+        let runner = ProcessRunner;
+        let result = runner.run("sh", &["-c", "printf hello"]);
+        assert_eq!(result.unwrap(), "hello");
+    }
+
+    #[test]
+    fn returns_stderr_on_failure() {
+        let runner = ProcessRunner;
+        let result = runner.run("sh", &["-c", "printf error 1>&2; exit 1"]);
+        assert_eq!(result.unwrap_err(), "error");
+    }
+
+    #[test]
+    fn returns_stdout_when_failure_has_no_stderr() {
+        let runner = ProcessRunner;
+        let result = runner.run("sh", &["-c", "printf fallback; exit 1"]);
+        assert_eq!(result.unwrap_err(), "fallback");
+    }
+}
