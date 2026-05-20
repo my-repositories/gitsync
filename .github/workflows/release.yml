@@ -15,12 +15,12 @@ jobs:
         include:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            artifact_name: gitsync-x86_64-unknown-linux-gnu
             binary_name: gitsync
+            package_ext: tar.gz
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            artifact_name: gitsync-x86_64-pc-windows-msvc
             binary_name: gitsync.exe
+            package_ext: zip
 
     runs-on: ${{ matrix.os }}
 
@@ -36,25 +36,35 @@ jobs:
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Package
+      - name: Package Linux
+        if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
           mkdir -p dist
-          cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} dist/
-          cd dist
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            7z a ../${{ matrix.artifact_name }}.zip ${{ matrix.binary_name }}
-          else
-            tar -czf ../${{ matrix.artifact_name }}.tar.gz ${{ matrix.binary_name }}
-          fi
+          cp target/${{ matrix.target }}/release/${{ matrix.binary_name }} dist/gitsync
+          tar -czf gitsync-${{ matrix.target }}.tar.gz -C dist gitsync
 
-      - name: Upload artifact
+      - name: Package Windows
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.binary_name }}" "dist/gitsync.exe"
+          Compress-Archive -Path dist/gitsync.exe -DestinationPath "gitsync-${{ matrix.target }}.zip" -Force
+
+      - name: Upload Linux artifact
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: |
-            ${{ matrix.artifact_name }}.zip
-            ${{ matrix.artifact_name }}.tar.gz
+          name: gitsync-x86_64-unknown-linux-gnu
+          path: gitsync-x86_64-unknown-linux-gnu.tar.gz
+
+      - name: Upload Windows artifact
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gitsync-x86_64-pc-windows-msvc
+          path: gitsync-x86_64-pc-windows-msvc.zip
 
   release:
     needs: build
@@ -65,15 +75,17 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: gitsync-x86_64-unknown-linux-gnu
+          path: artifacts/linux
 
       - name: Download Windows artifact
         uses: actions/download-artifact@v4
         with:
           name: gitsync-x86_64-pc-windows-msvc
+          path: artifacts/windows
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            *.tar.gz
-            *.zip
+            artifacts/linux/*.tar.gz
+            artifacts/windows/*.zip
