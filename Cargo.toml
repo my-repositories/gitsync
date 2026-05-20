@@ -1,6 +1,6 @@
 [package]
-name = "rustport"
-version = "0.1.0"
+name = "gitsync"
+version = "0.1.1"
 edition = "2024"
 
 [dependencies]
