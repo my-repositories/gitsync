@@ -2,6 +2,9 @@
 
 `GitSync` — небольшая CLI-утилита для синхронизации текущей git-ветки в несколько удалённых репозиториев и подготовки SSH `known_hosts`.
 
+[![CI](https://github.com/my-repositories/gitsync/actions/workflows/ci.yml/badge.svg)](https://github.com/my-repositories/gitsync/actions/workflows/ci.yml)
+[![Coverage](https://raw.githubusercontent.com/my-repositories/gitsync/refs/heads/badges/coverage.svg)](https://my-repositories.github.io/gitsync)
+
 ## Что делает
 
 - Проверяет, что команда запущена внутри git-репозитория.
