@@ -19,7 +19,9 @@ public class Program
                 builder.SetMinimumLevel(minLevel);
             })
             .AddSingleton(cfg)
-            .AddSingleton<GitSyncService>();
+            .AddSingleton<IProcessRunner, ProcessRunner>()
+            .AddSingleton<IGitSyncService, GitSyncService>()
+            .AddSingleton<IKnownHostsService, KnownHostsService>();
     }
 
     public static async Task Main()
@@ -27,7 +29,9 @@ public class Program
         var cfg = await new ConfigReader().ReadConfig();
 
         using var sp = ConfigureServices(cfg).BuildServiceProvider();
-        var app = sp.GetRequiredService<GitSyncService>();
-        await app.RunAsync();
+        var knownHostsService = sp.GetRequiredService<IKnownHostsService>();
+        var gitSyncService = sp.GetRequiredService<IGitSyncService>();
+        await knownHostsService.WarmUpAsync();
+        await gitSyncService.RunAsync();
     }
 }

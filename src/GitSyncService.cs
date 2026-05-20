@@ -3,13 +3,20 @@ using Microsoft.Extensions.Logging;
 
 namespace GitSync;
 
-public sealed class GitSyncService
+public interface IGitSyncService
 {
+    Task RunAsync();
+}
+
+public sealed class GitSyncService : IGitSyncService
+{
+    private readonly IProcessRunner _processRunner;
     private readonly ILogger<GitSyncService> _logger;
     private readonly ConfigSettings _cfg;
 
-    public GitSyncService(ILogger<GitSyncService> logger, ConfigSettings cfg)
+    public GitSyncService(IProcessRunner processRunner, ILogger<GitSyncService> logger, ConfigSettings cfg)
     {
+        _processRunner = processRunner;
         _logger = logger;
         _cfg = cfg;
     }
@@ -38,8 +45,8 @@ public sealed class GitSyncService
 
     private async Task<string> BuildRefspecAsync()
     {
-        var sourceRemoteUrl = await StartProcessAsync("git", $"remote get-url {_cfg.SourceRemoteName}");
-        var branchName = await StartProcessAsync("git", "branch --show-current");
+        var sourceRemoteUrl = await _processRunner.RunAsync("git", $"remote get-url {_cfg.SourceRemoteName}");
+        var branchName = await _processRunner.RunAsync("git", "branch --show-current");
         var remoteBranch = BuildRemoteBranch(_cfg.RemoteBranchTemplate, sourceRemoteUrl, branchName);
 
         return $"{branchName}:{remoteBranch}";
@@ -49,7 +56,7 @@ public sealed class GitSyncService
     {
         try
         {
-            await StartProcessAsync("git", $"push {remote.Key} {refspec}");
+            await _processRunner.RunAsync("git", $"push {remote.Key} {refspec}");
             _logger.LogInformation("{Name} push successfully completed", remote.Key);
             return (remote.Key, true);
         }
@@ -67,7 +74,7 @@ public sealed class GitSyncService
         if (existingUrl is null)
         {
             _logger.LogInformation("{Name} adding remote url...", remoteName);
-            await StartProcessAsync("git", $"remote add {remoteName} {remoteUrl}");
+            await _processRunner.RunAsync("git", $"remote add {remoteName} {remoteUrl}");
             _logger.LogInformation("{Name} remote url successfully added", remoteName);
             return;
         }
@@ -79,7 +86,7 @@ public sealed class GitSyncService
         }
 
         _logger.LogInformation("{Name} updating remote url...", remoteName);
-        await StartProcessAsync("git", $"remote set-url {remoteName} {remoteUrl}");
+        await _processRunner.RunAsync("git", $"remote set-url {remoteName} {remoteUrl}");
         _logger.LogInformation("{Name} remote url successfully updated", remoteName);
     }
 
@@ -87,7 +94,7 @@ public sealed class GitSyncService
     {
         try
         {
-            return await StartProcessAsync("git", $"remote get-url {remoteName}");
+            return await _processRunner.RunAsync("git", $"remote get-url {remoteName}");
         }
         catch (InvalidOperationException ex) when (
             ex.Message.Contains("No such remote", StringComparison.OrdinalIgnoreCase)
@@ -116,40 +123,11 @@ public sealed class GitSyncService
     {
         try
         {
-            await StartProcessAsync("git", "rev-parse --is-inside-work-tree");
+            await _processRunner.RunAsync("git", "rev-parse --is-inside-work-tree");
         }
         catch (Exception ex)
         {
             throw new InvalidOperationException("Current directory is not a git repository.", ex);
         }
-    }
-
-    private static async Task<string> StartProcessAsync(string fileName, string arguments)
-    {
-        var psi = new ProcessStartInfo
-        {
-            FileName = fileName,
-            Arguments = arguments,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        using var process = Process.Start(psi)
-            ?? throw new InvalidOperationException("Failed to start process.");
-
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-
-        await process.WaitForExitAsync();
-
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
-
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException(string.IsNullOrWhiteSpace(stderr) ? stdout : stderr);
-
-        return stdout.Trim();
     }
 }
