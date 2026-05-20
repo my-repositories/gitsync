@@ -16,36 +16,33 @@ public sealed class GitSyncService
 
     public async Task RunAsync()
     {
-        _logger.LogInformation("Start syncing");
+        await EnsureInsideGitRepoAsync();
 
-        var sourceRemoteUrl = await StartProcessAsync
-        (
-            "git",
-            $"remote get-url {_cfg.SourceRemoteName}"
-        );
-        var branchName = await StartProcessAsync("git", "branch --show-current");
-        var remoteBranch = BuildRemoteBranch
-        (
-            _cfg.RemoteBranchTemplate,
-            sourceRemoteUrl,
-            branchName
-        );
-        var refspec = $"{branchName}:{remoteBranch}";
+        _logger.LogInformation("Start syncing");
 
         foreach (var remote in _cfg.RemoteUrls)
         {
             await EnsureRemoteAsync(remote.Key, remote.Value);
         }
 
+        var refspec = await BuildRefspecAsync();
         var results = await Task.WhenAll(
             _cfg.RemoteUrls.Select(remote => PushRemoteAsync(remote, refspec))
         );
-
         var success = results.Count(r => r.Success);
         var error = results.Length - success;
 
         _logger.LogInformation("Success total: {Success}/{Total}", success, results.Length);
         _logger.LogInformation("Error total: {Error}/{Total}", error, results.Length);
+    }
+
+    private async Task<string> BuildRefspecAsync()
+    {
+        var sourceRemoteUrl = await StartProcessAsync("git", $"remote get-url {_cfg.SourceRemoteName}");
+        var branchName = await StartProcessAsync("git", "branch --show-current");
+        var remoteBranch = BuildRemoteBranch(_cfg.RemoteBranchTemplate, sourceRemoteUrl, branchName);
+
+        return $"{branchName}:{remoteBranch}";
     }
 
     private async Task<(string Name, bool Success)> PushRemoteAsync(KeyValuePair<string, string> remote, string refspec)
@@ -61,21 +58,6 @@ public sealed class GitSyncService
             _logger.LogError(ex, "{Name} failed to sync", remote.Key);
             return (remote.Key, false);
         }
-    }
-
-    private static string BuildRemoteBranch(string template, string originUrl, string branchName)
-    {
-        var repoPart = originUrl.Contains(':') ? originUrl.Split(':', 2)[1] : originUrl;
-        repoPart = repoPart.EndsWith(".git", StringComparison.OrdinalIgnoreCase) ? repoPart[..^4] : repoPart;
-
-        var parts = repoPart.Split('/', 2);
-        if (parts.Length != 2)
-            throw new InvalidOperationException($"Invalid origin url: {originUrl}");
-
-        return template
-            .Replace("%owner%", parts[0])
-            .Replace("%reponame%", parts[1])
-            .Replace("%branchname%", branchName);
     }
 
     private async Task EnsureRemoteAsync(string remoteName, string remoteUrl)
@@ -107,9 +89,38 @@ public sealed class GitSyncService
         {
             return await StartProcessAsync("git", $"remote get-url {remoteName}");
         }
-        catch
+        catch (InvalidOperationException ex) when (
+            ex.Message.Contains("No such remote", StringComparison.OrdinalIgnoreCase)
+        )
         {
             return null;
+        }
+    }
+
+    private static string BuildRemoteBranch(string template, string originUrl, string branchName)
+    {
+        var repoPart = originUrl.Contains(':') ? originUrl.Split(':', 2)[1] : originUrl;
+        repoPart = repoPart.EndsWith(".git", StringComparison.OrdinalIgnoreCase) ? repoPart[..^4] : repoPart;
+
+        var parts = repoPart.Split('/', 2);
+        if (parts.Length != 2)
+            throw new InvalidOperationException($"Invalid origin url: {originUrl}");
+
+        return template
+            .Replace("%owner%", parts[0])
+            .Replace("%reponame%", parts[1])
+            .Replace("%branchname%", branchName);
+    }
+
+    private async Task EnsureInsideGitRepoAsync()
+    {
+        try
+        {
+            await StartProcessAsync("git", "rev-parse --is-inside-work-tree");
+        }
+        catch (Exception ex)
+        {
+            throw new InvalidOperationException("Current directory is not a git repository.", ex);
         }
     }
 
