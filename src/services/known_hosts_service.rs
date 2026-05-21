@@ -104,39 +104,52 @@ impl<R: IProcessRunner> KnownHostsService<R> {
 
         for host in hosts {
             debug!("Scanning host {}", host);
-
-            let mut args = Vec::new();
-            args.push("-q");
-
-            if !self.cfg.ssh_key_types.trim().is_empty() {
-                args.push("-t");
-                args.push(self.cfg.ssh_key_types.trim());
-            }
-            args.push(host);
-
-            let output = match self.process_runner.run("ssh-keyscan", &args) {
-                Ok(out) => out,
-                Err(err_msg) => {
-                    log::error!("Failed to execute ssh-keyscan for {}: {}", host, err_msg);
-                    continue;
-                }
-            };
-
-            let clean_stdout = output.stdout.replace('\r', "");
-            let clean_stderr = output.stderr.replace('\r', "");
-            let full_output = format!("{}\n{}", clean_stdout, clean_stderr);
-
-            let lines = full_output
-                .lines()
-                .map(str::trim)
-                .filter(|line| Self::line_is_valid_known_host_line(line))
-                .filter(|line| Self::line_matches_host(line, host))
-                .map(ToOwned::to_owned);
-
+            
+            let output = self.execute_scan_with_fallback(host).await?;
+            let lines = Self::parse_scan_output(output, host);
+            
             result.extend(lines);
         }
 
         Ok(result)
+    }
+
+    async fn execute_scan_with_fallback(&self, host: &str) -> Result<ProcessOutput> {
+        let mut args = Vec::new();
+        if !self.cfg.ssh_key_types.trim().is_empty() {
+            args.push("-t");
+            args.push(self.cfg.ssh_key_types.trim());
+        }
+        args.push(host);
+
+        let mut output = self
+            .process_runner
+            .run("ssh-keyscan", &args)
+            .map_err(anyhow::Error::msg)?;
+
+        if output.stdout.trim().is_empty() && !self.cfg.ssh_key_types.trim().is_empty() {
+            debug!("Empty stdout for {} with type flag. Retrying broad scan...", host);
+            if let Ok(fallback) = self.process_runner.run("ssh-keyscan", &[host]) {
+                output = fallback;
+            }
+        }
+
+        Ok(output)
+    }
+
+    fn parse_scan_output(output: ProcessOutput, host: &str) -> Vec<String> {
+        let clean_stdout = output.stdout.replace('\r', "");
+        let clean_stderr = output.stderr.replace('\r', "");
+        let full_output = format!("{}\n{}", clean_stdout, clean_stderr);
+
+        full_output
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .filter(|line| Self::line_is_valid_known_host_line(line))
+            .filter(|line| Self::line_matches_host(line, host))
+            .map(ToOwned::to_owned)
+            .collect()
     }
 
     async fn save_known_hosts(&self, known_hosts_path: &PathBuf, lines: &[String]) -> Result<()> {
@@ -155,7 +168,9 @@ impl<R: IProcessRunner> KnownHostsService<R> {
     }
 
     fn line_matches_host(line: &str, host: &str) -> bool {
-        line.starts_with(&(host.to_string() + " ")) || line.starts_with(&(host.to_string() + ","))
+        line.starts_with(&(host.to_string() + " "))
+            || line.starts_with(&(host.to_string() + "\t"))
+            || line.starts_with(&(host.to_string() + ","))
     }
 
     fn parse_host(remote_url: &str) -> Result<String> {
