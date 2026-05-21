@@ -1,6 +1,7 @@
 use log::debug;
 use std::process::Command;
 
+#[derive(Debug, PartialEq)]
 pub struct ProcessOutput {
     pub stdout: String,
     pub stderr: String,
