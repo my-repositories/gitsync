@@ -201,6 +201,7 @@ mod tests {
             log_level: "info".to_string(),
             source_remote_name: "origin".to_string(),
             remote_branch_template: "%owner%/%reponame%/%branchname%".to_string(),
+            ssh_key_types: "".to_string(),
             remote_urls: std::collections::HashMap::from([(
                 "mirror1".to_string(),
                 "git@github.com:owner/repo.git".to_string(),
