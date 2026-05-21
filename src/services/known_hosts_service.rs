@@ -104,10 +104,10 @@ impl<R: IProcessRunner> KnownHostsService<R> {
 
         for host in hosts {
             debug!("Scanning host {}", host);
-            
+
             let output = self.execute_scan_with_fallback(host).await?;
             let lines = Self::parse_scan_output(output, host);
-            
+
             result.extend(lines);
         }
 
@@ -128,7 +128,10 @@ impl<R: IProcessRunner> KnownHostsService<R> {
             .map_err(anyhow::Error::msg)?;
 
         if output.stdout.trim().is_empty() && !self.cfg.ssh_key_types.trim().is_empty() {
-            debug!("Empty stdout for {} with type flag. Retrying broad scan...", host);
+            debug!(
+                "Empty stdout for {} with type flag. Retrying broad scan...",
+                host
+            );
             if let Ok(fallback) = self.process_runner.run("ssh-keyscan", &[host]) {
                 output = fallback;
             }
