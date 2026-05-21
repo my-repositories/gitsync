@@ -56,13 +56,10 @@ impl<R: IProcessRunner> KnownHostsService<R> {
     }
 
     fn get_known_hosts_path() -> PathBuf {
-        let home = env::var("HOME").ok();
-        Self::resolve_known_hosts_path(home.as_deref())
-    }
+        let ssh_dir = dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".ssh");
 
-    fn resolve_known_hosts_path(home: Option<&str>) -> PathBuf {
-        let home = home.unwrap_or(".");
-        let ssh_dir = PathBuf::from(home).join(".ssh");
         let _ = std::fs::create_dir_all(&ssh_dir);
         ssh_dir.join("known_hosts")
     }
