@@ -16,7 +16,10 @@ pub struct ProcessRunner;
 
 impl IProcessRunner for ProcessRunner {
     fn run(&self, file_name: &str, arguments: &[&str]) -> Result<ProcessOutput, String> {
-        debug!("Executing command: {} with args: {:?}", file_name, arguments);
+        debug!(
+            "Executing command: {} with args: {:?}",
+            file_name, arguments
+        );
 
         let output = Command::new(file_name)
             .args(arguments)
@@ -46,7 +49,11 @@ mod tests {
     use super::*;
 
     fn shell_cmd() -> (&'static str, &'static str) {
-        if cfg!(windows) { ("cmd", "/c") } else { ("sh", "-c") }
+        if cfg!(windows) {
+            ("cmd", "/c")
+        } else {
+            ("sh", "-c")
+        }
     }
 
     #[test]
@@ -62,7 +69,11 @@ mod tests {
     fn returns_stderr_on_failure() {
         let runner = ProcessRunner;
         let (shell, flag) = shell_cmd();
-        let cmd = if cfg!(windows) { "echo error>&2 & exit 1" } else { "printf error 1>&2; exit 1" };
+        let cmd = if cfg!(windows) {
+            "echo error>&2 & exit 1"
+        } else {
+            "printf error 1>&2; exit 1"
+        };
         let result = runner.run(shell, &[flag, cmd]).unwrap();
         assert_eq!(result.stderr, "error");
         assert!(!result.success);
