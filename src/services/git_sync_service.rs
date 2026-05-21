@@ -198,7 +198,7 @@ mod tests {
 
     fn cfg() -> ConfigSettings {
         ConfigSettings {
-            log_level: "Information".to_string(),
+            log_level: "info".to_string(),
             source_remote_name: "origin".to_string(),
             remote_branch_template: "%owner%/%reponame%/%branchname%".to_string(),
             remote_urls: std::collections::HashMap::from([(

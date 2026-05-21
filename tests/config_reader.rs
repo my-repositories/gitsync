@@ -10,7 +10,7 @@ async fn reads_config_from_temp_file() {
     write!(
         file,
         r#"{{
-            "LogLevel": "Information",
+            "LogLevel": "info",
             "RemoteBranchTemplate": "%owner%/%reponame%/%branchname%",
             "RemoteUrls": {{
                 "mirror1": "git@github.com:owner/repo.git",
@@ -29,7 +29,7 @@ async fn reads_config_from_temp_file() {
     // Превращаем в финальный чистый ConfigSettings
     let cfg = partial_cfg.into_final_settings();
 
-    assert_eq!(cfg.log_level, "Information");
+    assert_eq!(cfg.log_level, "info");
     assert_eq!(
         cfg.remote_branch_template,
         "%owner%/%reponame%/%branchname%"
