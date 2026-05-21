@@ -17,10 +17,12 @@ jobs:
             target: x86_64-unknown-linux-gnu
             binary_name: gitsync
             asset_name: gitsync
+            artifact_name: gitsync-linux
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary_name: gitsync.exe
-            asset_name: gitsyn.exe
+            asset_name: gitsync.exe
+            artifact_name: gitsync-windows
 
     runs-on: ${{ matrix.os }}
 
@@ -45,7 +47,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset_name }}
+          name: ${{ matrix.artifact_name }}
           path: dist/${{ matrix.asset_name }}
 
   release:
@@ -53,21 +55,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download Linux artifact
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: gitsync
-          path: artifacts/linux
-
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: gitsyn.exe
-          path: artifacts/windows
+          path: dist
+          merge-multiple: true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            artifacts/linux/gitsync
-            artifacts/windows/gitsync.exe
+          files: dist/*
