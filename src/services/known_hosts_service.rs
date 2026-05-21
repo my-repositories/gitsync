@@ -106,8 +106,8 @@ impl<R: IProcessRunner> KnownHostsService<R> {
             debug!("Scanning host {}", host);
 
             let mut args = Vec::new();
-            args.push("-q"); 
-            
+            args.push("-q");
+
             if !self.cfg.ssh_key_types.trim().is_empty() {
                 args.push("-t");
                 args.push(self.cfg.ssh_key_types.trim());
