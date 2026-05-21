@@ -193,6 +193,7 @@ impl<R: IProcessRunner> GitSyncService<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::process_runner::ProcessOutput;
     use std::cell::RefCell;
     use std::collections::VecDeque;
 
