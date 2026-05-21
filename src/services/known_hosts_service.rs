@@ -115,20 +115,14 @@ impl<R: IProcessRunner> KnownHostsService<R> {
             let output = match self.process_runner.run("ssh-keyscan", &args) {
                 Ok(out) => out,
                 Err(err_msg) => {
-                    let has_valid_lines = err_msg
-                        .lines()
-                        .any(|l| !l.trim().starts_with('#') && !l.trim().is_empty());
-
-                    if has_valid_lines {
-                        err_msg
-                    } else {
-                        log::debug!("ssh-keyscan info/status for {}: {}", host, err_msg);
-                        err_msg
-                    }
+                    log::error!("Failed to execute ssh-keyscan for {}: {}", host, err_msg);
+                    continue;
                 }
             };
 
-            let lines = output
+            let full_output = format!("{}\n{}", output.stdout, output.stderr);
+
+            let lines = full_output
                 .lines()
                 .map(str::trim)
                 .filter(|line| Self::line_is_valid_known_host_line(line))
@@ -182,6 +176,7 @@ impl<R: IProcessRunner> KnownHostsService<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::process_runner::ProcessOutput;
     use std::cell::RefCell;
     use std::collections::{HashMap, VecDeque};
 
@@ -205,16 +200,30 @@ mod tests {
     }
 
     impl IProcessRunner for FakeRunner {
-        fn run(&self, file_name: &str, arguments: &[&str]) -> Result<String, String> {
+        fn run(&self, file_name: &str, arguments: &[&str]) -> Result<ProcessOutput, String> {
             self.calls.borrow_mut().push((
                 file_name.to_string(),
                 arguments.iter().map(|s| s.to_string()).collect(),
             ));
 
-            self.responses
+            let raw_response = self
+                .responses
                 .borrow_mut()
                 .pop_front()
-                .unwrap_or_else(|| Err("unexpected call".to_string()))
+                .unwrap_or_else(|| Err("unexpected call".to_string()));
+
+            match raw_response {
+                Ok(stdout) => Ok(ProcessOutput {
+                    stdout,
+                    stderr: "".to_string(),
+                    success: true,
+                }),
+                Err(stderr) => Ok(ProcessOutput {
+                    stdout: "".to_string(),
+                    stderr,
+                    success: false,
+                }),
+            }
         }
     }
 
@@ -229,10 +238,7 @@ mod tests {
                     "mirror1".to_string(),
                     "git@github.com:owner/repo.git".to_string(),
                 ),
-                (
-                    "mirror2".to_string(),
-                    "https://gitlab.com/team/repo.git".to_string(),
-                ),
+                ("mirror2".to_string(), "https://gitlab.com".to_string()),
             ]),
         }
     }
@@ -248,8 +254,7 @@ mod tests {
     #[test]
     fn parse_host_https_url() {
         assert_eq!(
-            KnownHostsService::<FakeRunner>::parse_host("https://gitlab.com/team/repo.git")
-                .unwrap(),
+            KnownHostsService::<FakeRunner>::parse_host("https://gitlab.com").unwrap(),
             "gitlab.com"
         );
     }

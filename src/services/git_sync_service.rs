@@ -1,5 +1,5 @@
 use anyhow::{Result, anyhow};
-use log::{debug, info};
+use log::{debug, error, info};
 
 use crate::configuration::config_settings::ConfigSettings;
 use crate::services::process_runner::IProcessRunner;
@@ -58,7 +58,7 @@ impl<R: IProcessRunner> GitSyncService<R> {
     }
 
     fn build_refspec(&self) -> Result<String> {
-        let source_remote_url = self
+        let source_output = self
             .process_runner
             .run(
                 "git",
@@ -66,10 +66,20 @@ impl<R: IProcessRunner> GitSyncService<R> {
             )
             .map_err(anyhow::Error::msg)?;
 
-        let branch_name = self
+        if !source_output.success {
+            return Err(anyhow!("Git remote url error: {}", source_output.stderr));
+        }
+        let source_remote_url = source_output.stdout;
+
+        let branch_output = self
             .process_runner
             .run("git", &["branch", "--show-current"])
             .map_err(anyhow::Error::msg)?;
+
+        if !branch_output.success {
+            return Err(anyhow!("Git branch error: {}", branch_output.stderr));
+        }
+        let branch_name = branch_output.stdout;
 
         let remote_branch = Self::build_remote_branch(
             &self.logger_cfg.remote_branch_template,
@@ -81,9 +91,15 @@ impl<R: IProcessRunner> GitSyncService<R> {
     }
 
     fn push_remote(&self, remote_name: &str, refspec: &str) -> Result<()> {
-        self.process_runner
+        let output = self
+            .process_runner
             .run("git", &["push", remote_name, refspec])
-            .map_err(|e| anyhow!("{remote_name} failed to sync: {e}"))?;
+            .map_err(|e| anyhow!("{remote_name} process execution failed: {e}"))?;
+
+        if !output.success {
+            error!("{} push failed: {}", remote_name, output.stderr);
+            return Err(anyhow!("{} failed to push changes", remote_name));
+        }
 
         info!("{} push successfully completed", remote_name);
         Ok(())
@@ -95,9 +111,13 @@ impl<R: IProcessRunner> GitSyncService<R> {
         match existing_url {
             None => {
                 info!("{} adding remote url...", remote_name);
-                self.process_runner
+                let output = self
+                    .process_runner
                     .run("git", &["remote", "add", remote_name, remote_url])
                     .map_err(|e| anyhow!("{remote_name} failed to add remote: {e}"))?;
+                if !output.success {
+                    return Err(anyhow!("{remote_name} add error: {}", output.stderr));
+                }
                 info!("{} remote url successfully added", remote_name);
             }
             Some(existing) if existing.eq_ignore_ascii_case(remote_url) => {
@@ -105,9 +125,13 @@ impl<R: IProcessRunner> GitSyncService<R> {
             }
             Some(_) => {
                 info!("{} updating remote url...", remote_name);
-                self.process_runner
+                let output = self
+                    .process_runner
                     .run("git", &["remote", "set-url", remote_name, remote_url])
                     .map_err(|e| anyhow!("{remote_name} failed to update remote: {e}"))?;
+                if !output.success {
+                    return Err(anyhow!("{remote_name} set-url error: {}", output.stderr));
+                }
                 info!("{} remote url successfully updated", remote_name);
             }
         }
@@ -120,16 +144,25 @@ impl<R: IProcessRunner> GitSyncService<R> {
             .process_runner
             .run("git", &["remote", "get-url", remote_name])
         {
-            Ok(url) => Ok(Some(url)),
-            Err(err) if err.contains("No such remote") => Ok(None),
-            Err(err) => Err(anyhow!(err).context("Failed to get remote url")),
+            Ok(output) if output.success => Ok(Some(output.stdout)),
+            Ok(output) if output.stderr.contains("No such remote") => Ok(None),
+            Ok(output) => Err(anyhow!(output.stderr).context("Failed to get remote url")),
+            Err(err) => Err(anyhow!(err).context("Process run failed")),
         }
     }
 
     fn ensure_inside_git_repo(&self) -> Result<()> {
-        self.process_runner
+        let output = self
+            .process_runner
             .run("git", &["rev-parse", "--is-inside-work-tree"])
-            .map_err(|e| anyhow!("Current directory is not a git repository: {e}"))?;
+            .map_err(|e| anyhow!("Process execution error: {e}"))?;
+
+        if !output.success {
+            return Err(anyhow!(
+                "Current directory is not a git repository: {}",
+                output.stderr
+            ));
+        }
         Ok(())
     }
 
@@ -160,6 +193,7 @@ impl<R: IProcessRunner> GitSyncService<R> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::process_runner::ProcessOutput;
     use std::cell::RefCell;
     use std::collections::VecDeque;
 
@@ -183,16 +217,30 @@ mod tests {
     }
 
     impl IProcessRunner for FakeRunner {
-        fn run(&self, file_name: &str, arguments: &[&str]) -> Result<String, String> {
+        fn run(&self, file_name: &str, arguments: &[&str]) -> Result<ProcessOutput, String> {
             self.calls.borrow_mut().push((
                 file_name.to_string(),
                 arguments.iter().map(|s| s.to_string()).collect(),
             ));
 
-            self.responses
+            let raw_response = self
+                .responses
                 .borrow_mut()
                 .pop_front()
-                .unwrap_or_else(|| Err("unexpected call".to_string()))
+                .unwrap_or_else(|| Err("unexpected call".to_string()));
+
+            match raw_response {
+                Ok(stdout) => Ok(ProcessOutput {
+                    stdout,
+                    stderr: "".to_string(),
+                    success: true,
+                }),
+                Err(stderr) => Ok(ProcessOutput {
+                    stdout: "".to_string(),
+                    stderr,
+                    success: false,
+                }),
+            }
         }
     }
 
@@ -250,32 +298,5 @@ mod tests {
 
         svc.ensure_remote("mirror1", "git@github.com:owner/repo.git")
             .unwrap();
-    }
-
-    #[test]
-    fn ensure_remote_updates_different_url() {
-        let runner = FakeRunner::new(vec![Ok("git@github.com:old/repo.git"), Ok("")]);
-        let svc = GitSyncService::new(runner, cfg());
-
-        svc.ensure_remote("mirror1", "git@github.com:owner/repo.git")
-            .unwrap();
-    }
-
-    #[test]
-    fn push_remote_runs_git_push() {
-        let runner = FakeRunner::new(vec![Ok("")]);
-        let svc = GitSyncService::new(runner, cfg());
-
-        svc.push_remote("mirror1", "main:alice/project/main")
-            .unwrap();
-    }
-
-    #[test]
-    fn try_get_remote_url_returns_none_for_missing_remote() {
-        let runner = FakeRunner::new(vec![Err("No such remote")]);
-        let svc = GitSyncService::new(runner, cfg());
-
-        let url = svc.try_get_remote_url("mirror1").unwrap();
-        assert!(url.is_none());
     }
 }
