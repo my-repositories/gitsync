@@ -90,6 +90,9 @@ mod tests {
         assert_eq!(final_cfg.log_level, "Debug");
         assert_eq!(final_cfg.source_remote_name, "origin");
         assert_eq!(final_cfg.remote_urls["m1"], "url");
-        assert_eq!(final_cfg.remote_branch_template, "%owner%/%reponame%/%branchname%");
+        assert_eq!(
+            final_cfg.remote_branch_template,
+            "%owner%/%reponame%/%branchname%"
+        );
     }
 }
