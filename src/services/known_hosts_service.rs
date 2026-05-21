@@ -112,10 +112,7 @@ impl<R: IProcessRunner> KnownHostsService<R> {
             }
             args.push(host);
 
-            let output = match self
-                .process_runner
-                .run("ssh-keyscan", &args) 
-            {
+            let output = match self.process_runner.run("ssh-keyscan", &args) {
                 Ok(out) => out,
                 Err(err_msg) => {
                     log::warn!("ssh-keyscan failed for host {}: {}", host, err_msg);
