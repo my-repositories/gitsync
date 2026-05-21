@@ -32,9 +32,8 @@ impl ConfigReader {
 
     pub fn get_config_path() -> PathBuf {
         let config_env = env::var("GITSYNC_CONFIG_PATH").ok();
-        let home_env = env::var("HOME")
-            .or_else(|_| env::var("USERPROFILE"))
-            .ok();
+        let home_env = dirs::home_dir().and_then(|p| p.to_str().map(|s| s.to_string()));
+        
         Self::resolve_config_path(config_env.as_deref(), home_env.as_deref())
     }
 
