@@ -2,7 +2,7 @@ use anyhow::{Result, anyhow};
 use log::{debug, error, info};
 
 use crate::configuration::config_settings::ConfigSettings;
-use crate::services::process_runner::{IProcessRunner, ProcessOutput};
+use crate::services::process_runner::IProcessRunner;
 
 pub struct GitSyncService<R: IProcessRunner> {
     process_runner: R,
