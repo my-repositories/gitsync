@@ -105,10 +105,23 @@ impl<R: IProcessRunner> KnownHostsService<R> {
         for host in hosts {
             debug!("Scanning host {}", host);
 
-            let output = self
+            let mut args = Vec::new();
+            if !self.cfg.ssh_key_types.trim().is_empty() {
+                args.push("-t");
+                args.push(self.cfg.ssh_key_types.trim());
+            }
+            args.push(host);
+
+            let output = match self
                 .process_runner
-                .run("ssh-keyscan", &[host])
-                .map_err(anyhow::Error::msg)?;
+                .run("ssh-keyscan", &args) 
+            {
+                Ok(out) => out,
+                Err(err_msg) => {
+                    log::warn!("ssh-keyscan failed for host {}: {}", host, err_msg);
+                    continue;
+                }
+            };
 
             let lines = output
                 .lines()
@@ -205,6 +218,7 @@ mod tests {
             log_level: "info".to_string(),
             source_remote_name: "origin".to_string(),
             remote_branch_template: "%owner%/%reponame%/%branchname%".to_string(),
+            ssh_key_types: "".to_string(),
             remote_urls: HashMap::from([
                 (
                     "mirror1".to_string(),

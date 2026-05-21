@@ -9,6 +9,7 @@ pub struct ConfigSettings {
     pub remote_branch_template: String,
     pub remote_urls: HashMap<String, String>,
     pub source_remote_name: String,
+    pub ssh_key_types: String,
 }
 
 /// Промежуточная структура для частичной десериализации файлов и мержинга слоев
@@ -19,6 +20,7 @@ pub struct PartialConfigSettings {
     pub remote_branch_template: Option<String>,
     pub remote_urls: Option<HashMap<String, String>>,
     pub source_remote_name: Option<String>,
+    pub ssh_key_types: Option<String>,
 }
 
 impl PartialConfigSettings {
@@ -32,6 +34,9 @@ impl PartialConfigSettings {
         }
         if local.source_remote_name.is_some() {
             self.source_remote_name = local.source_remote_name;
+        }
+        if local.ssh_key_types.is_some() {
+            self.ssh_key_types = local.ssh_key_types;
         }
         if let Some(local_urls) = local.remote_urls {
             if let Some(ref mut base_urls) = self.remote_urls {
@@ -54,6 +59,7 @@ impl PartialConfigSettings {
             source_remote_name: self
                 .source_remote_name
                 .unwrap_or_else(|| "origin".to_string()),
+            ssh_key_types: self.ssh_key_types.unwrap_or_default(),
         }
     }
 }
