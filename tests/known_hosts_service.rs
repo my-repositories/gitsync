@@ -4,7 +4,7 @@ use std::fs;
 
 use gitsync::configuration::config_settings::ConfigSettings;
 use gitsync::services::known_hosts_service::KnownHostsService;
-use gitsync::services::process_runner::IProcessRunner;
+use gitsync::services::process_runner::{IProcessRunner, ProcessOutput};
 use tempfile::TempDir;
 
 struct FakeRunner {
@@ -27,16 +27,30 @@ impl FakeRunner {
 }
 
 impl IProcessRunner for FakeRunner {
-    fn run(&self, file_name: &str, arguments: &[&str]) -> Result<String, String> {
+    fn run(&self, file_name: &str, arguments: &[&str]) -> Result<ProcessOutput, String> {
         self.calls.borrow_mut().push((
             file_name.to_string(),
             arguments.iter().map(|s| s.to_string()).collect(),
         ));
 
-        self.responses
+        let raw_response = self
+            .responses
             .borrow_mut()
             .pop_front()
-            .unwrap_or_else(|| Err("unexpected call".to_string()))
+            .unwrap_or_else(|| Err("unexpected call".to_string()));
+
+        match raw_response {
+            Ok(stdout) => Ok(ProcessOutput {
+                stdout,
+                stderr: "".to_string(),
+                success: true,
+            }),
+            Err(stderr) => Ok(ProcessOutput {
+                stdout: "".to_string(),
+                stderr,
+                success: false,
+            }),
+        }
     }
 }
 
