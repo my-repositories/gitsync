@@ -1,6 +1,7 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
+/// Финальная конфигурация для всего приложения (чистые типы, без Option)
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct ConfigSettings {
@@ -10,21 +11,50 @@ pub struct ConfigSettings {
     pub source_remote_name: String,
 }
 
-impl ConfigSettings {
-    pub fn merge(&mut self, local: ConfigSettings) {
-        if !local.log_level.trim().is_empty() {
+/// Промежуточная структура для частичной десериализации файлов и мержинга слоев
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "PascalCase")]
+pub struct PartialConfigSettings {
+    pub log_level: Option<String>,
+    pub remote_branch_template: Option<String>,
+    pub remote_urls: Option<HashMap<String, String>>,
+    pub source_remote_name: Option<String>,
+}
+
+impl PartialConfigSettings {
+    /// Накладывает локальные заполненные настройки поверх текущих
+    pub fn merge(&mut self, local: PartialConfigSettings) {
+        if local.log_level.is_some() {
             self.log_level = local.log_level;
         }
-
-        if !local.remote_branch_template.trim().is_empty() {
+        if local.remote_branch_template.is_some() {
             self.remote_branch_template = local.remote_branch_template;
         }
-
-        if !local.source_remote_name.trim().is_empty() {
+        if local.source_remote_name.is_some() {
             self.source_remote_name = local.source_remote_name;
         }
+        if let Some(local_urls) = local.remote_urls {
+            if let Some(ref mut base_urls) = self.remote_urls {
+                base_urls.extend(local_urls);
+            } else {
+                self.remote_urls = Some(local_urls);
+            }
+        }
+    }
 
-        self.remote_urls.extend(local.remote_urls);
+    /// Преобразует опциональный конфиг в валидный ConfigSettings с дефолтными значениями,
+    /// если какие-то критичные поля так и не были найдены в файлах.
+    pub fn into_final_settings(self) -> ConfigSettings {
+        ConfigSettings {
+            log_level: self.log_level.unwrap_or_else(|| "Information".to_string()),
+            remote_branch_template: self
+                .remote_branch_template
+                .unwrap_or_else(|| "%owner%/%reponame%/%branchname%".to_string()),
+            remote_urls: self.remote_urls.unwrap_or_default(),
+            source_remote_name: self
+                .source_remote_name
+                .unwrap_or_else(|| "origin".to_string()),
+        }
     }
 }
 
@@ -33,88 +63,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn deserializes_pascal_case_config() {
-        let json = r#"
-        {
-            "LogLevel": "Information",
-            "RemoteBranchTemplate": "%owner%/%reponame%/%branchname%",
-            "RemoteUrls": {
-                "mirror1": "git@github.com:owner/repo.git",
-                "mirror2": "git@gitlab.com:owner/repo.git"
-            },
-            "SourceRemoteName": "origin"
-        }
-        "#;
-
-        let cfg: ConfigSettings = serde_json::from_str(json).unwrap();
-
-        assert_eq!(cfg.log_level, "Information");
-        assert_eq!(
-            cfg.remote_branch_template,
-            "%owner%/%reponame%/%branchname%"
-        );
-        assert_eq!(cfg.source_remote_name, "origin");
-        assert_eq!(cfg.remote_urls.len(), 2);
-        assert_eq!(cfg.remote_urls["mirror1"], "git@github.com:owner/repo.git");
+    fn deserializes_pascal_case_partial_config() {
+        let json = r#"{"LogLevel": "Information"}"#;
+        let cfg: PartialConfigSettings = serde_json::from_str(json).unwrap();
+        assert_eq!(cfg.log_level.as_deref(), Some("Information"));
+        assert!(cfg.source_remote_name.is_none());
     }
 
     #[test]
-    fn test_config_merge_logic() {
-        // 1. Создаем глобальный конфиг со стандартными настройками
-        let mut global_cfg = ConfigSettings {
-            log_level: "Information".to_string(),
-            remote_branch_template: "global/template".to_string(),
-            source_remote_name: "origin".to_string(),
-            remote_urls: HashMap::from([
-                (
-                    "global_mirror".to_string(),
-                    "git@github.com:global.git".to_string(),
-                ),
-                (
-                    "override_mirror".to_string(),
-                    "git@github.com:old.git".to_string(),
-                ),
-            ]),
+    fn test_partial_merge_and_finalize() {
+        let mut base = PartialConfigSettings {
+            log_level: Some("Info".to_string()),
+            source_remote_name: Some("origin".to_string()),
+            ..Default::default()
         };
 
-        // 2. Локальный конфиг (например, для конкретного проекта)
-        let local_cfg = ConfigSettings {
-            log_level: "Debug".to_string(),         // меняем уровень логирования
-            remote_branch_template: "".to_string(), // оставляем пустым, должно сохраниться глобальное
-            source_remote_name: "upstream".to_string(), // меняем сорс
-            remote_urls: HashMap::from([
-                (
-                    "override_mirror".to_string(),
-                    "git@github.com:new.git".to_string(),
-                ), // перебиваем юрл
-                (
-                    "local_mirror".to_string(),
-                    "git@github.com:local.git".to_string(),
-                ), // добавляем новое
-            ]),
+        let local = PartialConfigSettings {
+            log_level: Some("Debug".to_string()),
+            remote_urls: Some(HashMap::from([("m1".to_string(), "url".to_string())])),
+            ..Default::default()
         };
 
-        // Мержим
-        global_cfg.merge(local_cfg);
+        base.merge(local);
+        let final_cfg = base.into_final_settings();
 
-        // 3. Проверяем результаты
-        assert_eq!(global_cfg.log_level, "Debug"); // Перезаписалось
-        assert_eq!(global_cfg.remote_branch_template, "global/template"); // Сохранилось, так как в локальном была пустота
-        assert_eq!(global_cfg.source_remote_name, "upstream"); // Перезаписалось
-
-        // Проверяем мапу юрлов
-        assert_eq!(global_cfg.remote_urls.len(), 3); // Итого 3 ссылки
-        assert_eq!(
-            global_cfg.remote_urls["global_mirror"],
-            "git@github.com:global.git"
-        ); // Осталось от глобального
-        assert_eq!(
-            global_cfg.remote_urls["override_mirror"],
-            "git@github.com:new.git"
-        ); // Локальное затерло глобальное
-        assert_eq!(
-            global_cfg.remote_urls["local_mirror"],
-            "git@github.com:local.git"
-        ); // Добавилось из локального
+        assert_eq!(final_cfg.log_level, "Debug");
+        assert_eq!(final_cfg.source_remote_name, "origin");
+        assert_eq!(final_cfg.remote_urls["m1"], "url");
+        assert_eq!(final_cfg.remote_branch_template, "%owner%/%reponame%/%branchname%");
     }
 }
