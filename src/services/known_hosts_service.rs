@@ -5,7 +5,7 @@ use log::debug;
 use tokio::fs;
 
 use crate::configuration::config_settings::ConfigSettings;
-use crate::services::process_runner::IProcessRunner;
+use crate::services::process_runner::{IProcessRunner, ProcessOutput};
 
 pub struct KnownHostsService<R: IProcessRunner> {
     process_runner: R,
