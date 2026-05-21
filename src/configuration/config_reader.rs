@@ -133,9 +133,9 @@ mod tests {
 
         // Должно найти строго 3 конфига в правильном порядке наслоения
         assert_eq!(paths.len(), 3);
-        assert_eq!(paths, global_config); // 1. Базовый
-        assert_eq!(paths, org_config); // 2. Организация
-        assert_eq!(paths, local_config); // 3. Проект (самый локальный)
+        assert_eq!(paths[0], global_config); // 1. Базовый
+        assert_eq!(paths[1], org_config); // 2. Организация
+        assert_eq!(paths[2], local_config); // 3. Проект (самый локальный)
     }
 
     #[test]
