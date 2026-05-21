@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::{env, path::PathBuf};
 use tokio::fs;
 
-use crate::configuration::config_settings::ConfigSettings;
+use crate::configuration::config_settings::{ConfigSettings, PartialConfigSettings};
 
 pub struct ConfigReader;
 
@@ -16,26 +16,22 @@ impl ConfigReader {
             ));
         }
 
-        let mut final_cfg: Option<ConfigSettings> = None;
+        let mut final_partial = PartialConfigSettings::default();
 
         for path in config_paths {
             let cfg = Self::read_config_from_path(path).await?;
-            if let Some(ref mut current_base) = final_cfg {
-                current_base.merge(cfg);
-            } else {
-                final_cfg = Some(cfg);
-            }
+            final_partial.merge(cfg);
         }
 
-        final_cfg.context("Failed to build configuration")
+        Ok(final_partial.into_final_settings())
     }
 
-    pub async fn read_config_from_path(config_path: PathBuf) -> Result<ConfigSettings> {
+    pub async fn read_config_from_path(config_path: PathBuf) -> Result<PartialConfigSettings> {
         let json = fs::read_to_string(&config_path)
             .await
             .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
 
-        let cfg: ConfigSettings =
+        let cfg: PartialConfigSettings =
             serde_json::from_str(&json).context("Failed to deserialize config")?;
 
         Ok(cfg)
@@ -56,7 +52,6 @@ impl ConfigReader {
     ) -> Vec<PathBuf> {
         let mut paths = Vec::new();
 
-        // 1. ENV переменная (Абсолютный приоритет)
         if let Some(env_path) = config_env
             .map(|s| PathBuf::from(s.trim()))
             .filter(|p| p.exists())
@@ -65,7 +60,6 @@ impl ConfigReader {
             return paths;
         }
 
-        // 2. Глобальный конфиг (~/.gitsync/config.json)
         if let Some(home) = home_dir {
             let global_path = home.join(".gitsync").join("config.json");
             if global_path.exists() {
@@ -74,7 +68,6 @@ impl ConfigReader {
         }
 
         if let Some(current) = current_dir {
-            // 3. subdivision конфиг (Родительская папка)
             if let Some(parent) = current.parent() {
                 let parent_path = parent.join(".gitsync").join("config.json");
                 if parent_path.exists() && !paths.contains(&parent_path) {
@@ -82,7 +75,6 @@ impl ConfigReader {
                 }
             }
 
-            // 4. Локальный конфиг (Текущая папка проекта)
             let local_path = current.join(".gitsync").join("config.json");
             if local_path.exists() && !paths.contains(&local_path) {
                 paths.push(local_path);
@@ -96,7 +88,7 @@ impl ConfigReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::{File, create_dir_all};
+    use std::fs::{create_dir_all, File};
 
     #[test]
     fn test_env_takes_absolute_priority() {

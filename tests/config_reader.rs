@@ -21,9 +21,13 @@ async fn reads_config_from_temp_file() {
     )
     .unwrap();
 
-    let cfg = ConfigReader::read_config_from_path(file.path().to_path_buf())
+    // Получаем PartialConfigSettings
+    let partial_cfg = ConfigReader::read_config_from_path(file.path().to_path_buf())
         .await
         .unwrap();
+        
+    // Превращаем в финальный чистый ConfigSettings
+    let cfg = partial_cfg.into_final_settings();
 
     assert_eq!(cfg.log_level, "Information");
     assert_eq!(
