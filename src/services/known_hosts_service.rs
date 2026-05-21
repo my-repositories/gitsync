@@ -238,10 +238,7 @@ mod tests {
                     "mirror1".to_string(),
                     "git@github.com:owner/repo.git".to_string(),
                 ),
-                (
-                    "mirror2".to_string(),
-                    "https://gitlab.com".to_string(),
-                ),
+                ("mirror2".to_string(), "https://gitlab.com".to_string()),
             ]),
         }
     }
@@ -257,8 +254,7 @@ mod tests {
     #[test]
     fn parse_host_https_url() {
         assert_eq!(
-            KnownHostsService::<FakeRunner>::parse_host("https://gitlab.com")
-                .unwrap(),
+            KnownHostsService::<FakeRunner>::parse_host("https://gitlab.com").unwrap(),
             "gitlab.com"
         );
     }
