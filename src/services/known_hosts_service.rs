@@ -115,20 +115,14 @@ impl<R: IProcessRunner> KnownHostsService<R> {
             let output = match self.process_runner.run("ssh-keyscan", &args) {
                 Ok(out) => out,
                 Err(err_msg) => {
-                    let has_valid_lines = err_msg
-                        .lines()
-                        .any(|l| !l.trim().starts_with('#') && !l.trim().is_empty());
-
-                    if has_valid_lines {
-                        err_msg
-                    } else {
-                        log::debug!("ssh-keyscan info/status for {}: {}", host, err_msg);
-                        err_msg
-                    }
+                    log::error!("Failed to execute ssh-keyscan for {}: {}", host, err_msg);
+                    continue;
                 }
             };
 
-            let lines = output
+            let full_output = format!("{}\n{}", output.stdout, output.stderr);
+
+            let lines = full_output
                 .lines()
                 .map(str::trim)
                 .filter(|line| Self::line_is_valid_known_host_line(line))
