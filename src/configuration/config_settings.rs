@@ -46,7 +46,7 @@ impl PartialConfigSettings {
     /// если какие-то критичные поля так и не были найдены в файлах.
     pub fn into_final_settings(self) -> ConfigSettings {
         ConfigSettings {
-            log_level: self.log_level.unwrap_or_else(|| "Information".to_string()),
+            log_level: self.log_level.unwrap_or_else(|| "info".to_string()),
             remote_branch_template: self
                 .remote_branch_template
                 .unwrap_or_else(|| "%owner%/%reponame%/%branchname%".to_string()),
@@ -64,9 +64,9 @@ mod tests {
 
     #[test]
     fn deserializes_pascal_case_partial_config() {
-        let json = r#"{"LogLevel": "Information"}"#;
+        let json = r#"{"LogLevel": "info"}"#;
         let cfg: PartialConfigSettings = serde_json::from_str(json).unwrap();
-        assert_eq!(cfg.log_level.as_deref(), Some("Information"));
+        assert_eq!(cfg.log_level.as_deref(), Some("info"));
         assert!(cfg.source_remote_name.is_none());
     }
 

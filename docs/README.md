@@ -10,7 +10,7 @@
 Все поля являются **опциональными**. Если поле пропущено на локальном уровне, `gitsync` возьмет его значение с более глобального уровня или подставит дефолтное значение.
 
 ### Доступные поля и их значения по умолчанию:
-* `LogLevel` — уровень логирования (по умолчанию: `"Information"`).
+* `LogLevel` — уровень логирования (по умолчанию: `"info"`).
 * `SourceRemoteName` — имя исходного git-репозитория (по умолчанию: `"origin"`).
 * `RemoteBranchTemplate` — шаблон имени веток для зеркалирования (по умолчанию: `"%owner%/%reponame%/%branchname%"`).
 * `RemoteUrls` — список (JSON-объект) целевых репозиториев для синхронизации (зеркал).
@@ -37,7 +37,7 @@
 Задает общие базовые настройки для всей машины:
 ```json
 {
-  "LogLevel": "Information",
+  "LogLevel": "info",
   "SourceRemoteName": "origin",
   "RemoteBranchTemplate": "%owner%/%reponame%/%branchname%"
 }
@@ -87,7 +87,7 @@
 **Домашний конфиг (`~/.gitsync/config.json`):**
 ```json
 {
-  "LogLevel": "Information",
+  "LogLevel": "info",
   "SourceRemoteName": "origin",
   "RemoteUrls": {
     "backup": "git@gitlab.com:my-personal-account/backup-mirror.git"
