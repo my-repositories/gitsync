@@ -1,0 +1,31 @@
+~/.gitsync/config.json
+{
+  "LogLevel": "info",
+  "SourceRemoteName": "origin",
+  "RemoteBranchTemplate": "%reponame%/%branchname%",
+  "SshKeyTypes": "ed25519"
+}
+
+~/Projects/ai-warevo/.gitsync/config.json
+{
+  "RemoteUrls": {
+    "gitlab": "git@gitlab.com:loktionov129/gitsynced-ai-warevo.git",
+    "gitverse": "git@gitverse.ru:loktionov129/gitsynced-ai-warevo.git"
+  }
+}
+
+~/Projects/my-repositories/.gitsync/config.json
+{
+  "RemoteUrls": {
+    "gitlab": "git@gitlab.com:loktionov129/gitsynced-myrepos.git",
+    "gitverse": "git@gitverse.ru:loktionov129/gitsynced-myrepos.git"
+  }
+}
+
+~/Projects/loktionov129/.gitsync/config.json
+{
+  "RemoteUrls": {
+    "gitlab": "git@gitlab.com:loktionov129/gitsynced-loktionov129.git",
+    "gitverse": "git@gitverse.ru:loktionov129/gitsynced-loktionov129.git"
+  }
+}
