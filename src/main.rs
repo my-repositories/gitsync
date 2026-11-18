@@ -53,6 +53,31 @@ async fn run_app(skip_host: bool) -> Result<()> {
     Ok(())
 }
 
+/// Find the browser_download_url for an asset with the given name.
+fn find_asset_url<'a>(response: &'a str, asset_name: &str) -> Option<&'a str> {
+    // Find the assets array
+    let assets_start = response.find(r#""assets":["#)?;
+    let assets_section = &response[assets_start + r#""assets":["#.len()..];
+
+    // Find the matching asset by name
+    let search_pattern = format!(r#""name":"{}""#, asset_name);
+    let name_pos = assets_section.find(&search_pattern)?;
+
+    // Find the closing brace of this asset object (look for } that's not followed by ,)
+    let after_name = &assets_section[name_pos..];
+    let end_brace = after_name.find("}}")?;
+    let asset_obj = &after_name[..end_brace + 2];
+
+    // Find browser_download_url in this asset object
+    asset_obj.find(r#""browser_download_url":"#).and_then(|i| {
+        let url_start = &asset_obj[i + 23..];
+        url_start
+            .trim_start()
+            .strip_prefix('"')
+            .and_then(|s| s.split('"').next())
+    })
+}
+
 fn check_for_update() -> Result<()> {
     use std::env;
     use std::process::Command;
@@ -100,12 +125,15 @@ fn check_for_update() -> Result<()> {
 
     println!("New version available: v{latest_version} (current: v{VERSION})");
 
-    // Find the asset for this platform
-    let asset_url = response
-        .find(r#""browser_download_url":"#)
-        .map(|i| response[i + 23..].trim_start())
-        .and_then(|s| s.split('"').next())
-        .unwrap_or("");
+    // Determine expected asset name based on platform
+    let asset_name = if os == "windows" {
+        "gitsync.exe"
+    } else {
+        "gitsync"
+    };
+
+    // Find the asset URL by matching asset name
+    let asset_url = find_asset_url(&response, asset_name).unwrap_or("");
 
     if asset_url.is_empty() {
         eprintln!(
