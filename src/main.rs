@@ -78,8 +78,14 @@ fn check_for_update() -> Result<()> {
 
     // Parse version from JSON response
     let latest_version = response
-        .split_once(r#""tag_name":""#)
-        .and_then(|(_, rest)| rest.split('"').next())
+        .find(r#""tag_name":"#)
+        .and_then(|pos| {
+            let after = &response[pos + r#""tag_name":"#.len()..];
+            after
+                .trim_start()
+                .strip_prefix('"')
+                .and_then(|v| v.split('"').next())
+        })
         .unwrap_or(VERSION);
 
     let current_version = VERSION.trim_start_matches('v');
@@ -94,8 +100,9 @@ fn check_for_update() -> Result<()> {
 
     // Find the asset for this platform
     let asset_url = response
-        .split_once(r#""browser_download_url":""#)
-        .and_then(|(_, rest)| rest.split('"').next())
+        .find(r#""browser_download_url":"#)
+        .map(|i| response[i + 23..].trim_start())
+        .and_then(|s| s.split('"').next())
         .unwrap_or("");
 
     if asset_url.is_empty() {
