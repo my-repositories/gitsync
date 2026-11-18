@@ -79,12 +79,12 @@ impl<R: IProcessRunner> GitSyncService<R> {
         if !branch_output.success {
             return Err(anyhow!("Git branch error: {}", branch_output.stderr));
         }
-        let branch_name = branch_output.stdout;
+        let branch_name = branch_output.stdout.trim();
 
         let remote_branch = Self::build_remote_branch(
             &self.logger_cfg.remote_branch_template,
             &source_remote_url,
-            &branch_name,
+            branch_name,
         )?;
 
         Ok(format!("{branch_name}:{remote_branch}"))
@@ -183,10 +183,34 @@ impl<R: IProcessRunner> GitSyncService<R> {
             return Err(anyhow!("Invalid origin url: {origin_url}"));
         }
 
-        Ok(template
-            .replace("%owner%", owner)
-            .replace("%reponame%", reponame)
-            .replace("%branchname%", branch_name))
+        let sanitized = Self::sanitize_branch_name(
+            &template
+                .replace("%owner%", owner)
+                .replace("%reponame%", reponame)
+                .replace("%branchname%", branch_name),
+        );
+
+        Ok(sanitized)
+    }
+
+    /// Sanitize a git ref to ensure it only contains [a-zA-Z0-9_-].
+    /// Every character outside this set is replaced with '_'.
+    fn sanitize_branch_name(name: &str) -> String {
+        name.split('/')
+            .map(|component| {
+                component
+                    .chars()
+                    .map(|c| {
+                        if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+                            c
+                        } else {
+                            '_'
+                        }
+                    })
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("/")
     }
 }
 
@@ -298,5 +322,62 @@ mod tests {
 
         svc.ensure_remote("mirror1", "git@github.com:owner/repo.git")
             .unwrap();
+    }
+
+    #[test]
+    fn sanitize_branch_name_replaces_leading_dots() {
+        assert_eq!(
+            GitSyncService::<FakeRunner>::sanitize_branch_name(".github/main"),
+            "_github/main"
+        );
+    }
+
+    #[test]
+    fn sanitize_branch_name_replaces_double_dots() {
+        assert_eq!(
+            GitSyncService::<FakeRunner>::sanitize_branch_name("foo..bar/baz"),
+            "foo__bar/baz"
+        );
+    }
+
+    #[test]
+    fn sanitize_branch_name_leaves_valid_names_unchanged() {
+        assert_eq!(
+            GitSyncService::<FakeRunner>::sanitize_branch_name("owner/repo/main"),
+            "owner/repo/main"
+        );
+    }
+
+    #[test]
+    fn sanitize_branch_name_replaces_arbitrary_special_chars() {
+        assert_eq!(
+            GitSyncService::<FakeRunner>::sanitize_branch_name("feat/feat@2.0!"),
+            "feat/feat_2_0_"
+        );
+    }
+
+    #[test]
+    fn build_remote_branch_handles_dot_repo() {
+        let out = GitSyncService::<FakeRunner>::build_remote_branch(
+            "%owner%/%reponame%/%branchname%",
+            "git@github.com:ai-warevo/.github.git",
+            "main",
+        )
+        .unwrap();
+
+        // .github should become _github
+        assert_eq!(out, "ai-warevo/_github/main");
+    }
+
+    #[test]
+    fn build_refspec_handles_dot_repo() {
+        let runner = FakeRunner::new(vec![
+            Ok("git@github.com:ai-warevo/.github.git"),
+            Ok("main\n"),
+        ]);
+        let svc = GitSyncService::new(runner, cfg());
+
+        let refspec = svc.build_refspec().unwrap();
+        assert_eq!(refspec, "main:ai-warevo/_github/main");
     }
 }
