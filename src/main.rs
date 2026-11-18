@@ -21,6 +21,7 @@ enum CliAction {
     Run,
     Version,
     Update,
+    Help,
 }
 
 fn parse_args() -> CliAction {
@@ -29,6 +30,7 @@ fn parse_args() -> CliAction {
         match arg.as_str() {
             "-v" | "--version" => return CliAction::Version,
             "-u" | "--update" => return CliAction::Update,
+            "-h" | "--help" => return CliAction::Help,
             _ => {}
         }
     }
@@ -143,6 +145,22 @@ fn check_for_update() -> Result<()> {
     Ok(())
 }
 
+fn print_help() {
+    println!("gitsync v{VERSION}");
+    println!();
+    println!("USAGE:");
+    println!("    gitsync [OPTIONS]");
+    println!();
+    println!("OPTIONS:");
+    println!("    -h, --help          Print help");
+    println!("    -v, --version       Print version");
+    println!("    -u, --update        Check for and apply updates");
+    println!("    -s, --skip-host     Skip SSH known_hosts warm-up");
+    println!();
+    println!("COMMANDS:");
+    println!("    gitsync             Run git sync (default)");
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let action = parse_args();
@@ -153,6 +171,10 @@ async fn main() -> Result<()> {
             Ok(())
         }
         CliAction::Update => check_for_update(),
+        CliAction::Help => {
+            print_help();
+            Ok(())
+        }
         CliAction::Run => {
             let args: Vec<String> = std::env::args().collect();
             let skip_host = args
