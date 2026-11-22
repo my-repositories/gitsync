@@ -11,7 +11,7 @@ struct FakeRunner {
 }
 
 impl FakeRunner {
-    fn new(responses: Vec<Result<&str, &str>>) -> Self {
+    fn new(responses: Vec<Result<&'static str, &'static str>>) -> Self {
         Self {
             calls: RefCell::new(Vec::new()),
             responses: RefCell::new(
@@ -65,17 +65,115 @@ fn cfg() -> ConfigSettings {
     }
 }
 
-#[test]
-fn run_success_path() {
-    let runner = FakeRunner::new(vec![
+/// Helper: minimal response sequence for a successful push (no remote add needed).
+fn success_responses() -> Vec<Result<&'static str, &'static str>> {
+    vec![
         Ok("true"),                          // git rev-parse --is-inside-work-tree
         Ok("git@github.com:owner/repo.git"), // git remote get-url origin
         Ok("main"),                          // git branch --show-current
-        Err("No such remote"),               // git remote get-url mirror1
-        Ok(""),                              // git remote add mirror1 ...
+        Ok("git@github.com:owner/repo.git"), // git remote get-url mirror1 (already exists)
         Ok(""),                              // git push mirror1 ...
-    ]);
+    ]
+}
 
+/// Helper: response sequence where push fails.
+fn fail_push_responses() -> Vec<Result<&'static str, &'static str>> {
+    vec![
+        Ok("true"),                          // git rev-parse --is-inside-work-tree
+        Ok("git@github.com:owner/repo.git"), // git remote get-url origin
+        Ok("main"),                          // git branch --show-current
+        Ok("git@github.com:owner/repo.git"), // git remote get-url mirror1
+        Err("remote: Permission denied"),    // git push mirror1 ...
+    ]
+}
+
+/// Helper: HTTPS remote URL for origin.
+fn https_success_responses() -> Vec<Result<&'static str, &'static str>> {
+    vec![
+        Ok("true"),                              // git rev-parse --is-inside-work-tree
+        Ok("https://github.com/owner/repo.git"), // git remote get-url origin
+        Ok("main"),                              // git branch --show-current
+        Ok("https://github.com/owner/repo.git"), // git remote get-url mirror1
+        Ok(""),                                  // git push mirror1 ...
+    ]
+}
+
+#[test]
+fn run_success_path() {
+    let runner = FakeRunner::new(success_responses());
     let svc = GitSyncService::new(runner, cfg());
     svc.run().unwrap();
+}
+
+#[test]
+fn run_success_logs_info_no_errors() {
+    let runner = FakeRunner::new(success_responses());
+    let svc = GitSyncService::new(runner, cfg());
+
+    let result = svc.run();
+
+    assert!(result.is_ok(), "run should succeed when all pushes succeed");
+}
+
+#[test]
+fn run_with_push_error_logs_warn() {
+    let runner = FakeRunner::new(fail_push_responses());
+    let svc = GitSyncService::new(runner, cfg());
+
+    let result = svc.run();
+
+    assert!(
+        result.is_ok(),
+        "run should not propagate individual push errors"
+    );
+}
+
+#[test]
+fn compute_summary_no_errors_returns_info_branch() {
+    let runner = FakeRunner::new(success_responses());
+    let svc = GitSyncService::new(runner, cfg());
+
+    let results: Vec<(String, bool)> = svc.push_all("main:origin/main");
+    let (success, error, total) = svc.compute_summary(&results);
+
+    assert_eq!(total, 1);
+    assert_eq!(success, 1);
+    assert_eq!(error, 0);
+}
+
+#[test]
+fn compute_summary_with_errors_returns_warn_branch() {
+    let svc = GitSyncService::new(FakeRunner::new(vec![]), cfg());
+
+    let results = vec![("mirror1".to_string(), false)];
+    let (success, error, total) = svc.compute_summary(&results);
+
+    assert_eq!(total, 1);
+    assert_eq!(success, 0);
+    assert_eq!(error, 1);
+}
+
+#[test]
+fn compute_summary_multiple_remotes_mixed() {
+    let svc = GitSyncService::new(FakeRunner::new(vec![]), cfg());
+
+    let results = vec![
+        ("mirror1".to_string(), true),
+        ("mirror2".to_string(), false),
+        ("mirror3".to_string(), true),
+    ];
+    let (success, error, total) = svc.compute_summary(&results);
+
+    assert_eq!(total, 3);
+    assert_eq!(success, 2);
+    assert_eq!(error, 1);
+}
+
+#[test]
+fn run_with_https_origin_succeeds() {
+    let runner = FakeRunner::new(https_success_responses());
+    let svc = GitSyncService::new(runner, cfg());
+
+    let result = svc.run();
+    assert!(result.is_ok(), "run should succeed with HTTPS origin URL");
 }
