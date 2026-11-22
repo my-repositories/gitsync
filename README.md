@@ -1,5 +1,19 @@
 # 🔄 GitSync
 
+## ⚠️ Archived — Project Moved
+
+**This repository is archived.** `GitSync` (and the broader AI-driven development tooling) has been moved and consolidated into a single shared infrastructure repository.
+
+👉 **Active repo**: [ai-warevo/gitsync](https://github.com/ai-warevo/gitsync)
+
+## Why the move?
+
+- **Centralized infrastructure:** Reusable CLI tools, project templates, CI/CD workflows, skills, and editor configs are now maintained together in [ai-warevo/gitsync](https://github.com/ai-warevo/gitsync).
+- **Unified versioning & releases:** Managed centrally via shared workflows and `CHANGELOG.md`.
+
+
+---
+
 `GitSync` — небольшая CLI-утилита для синхронизации текущей git-ветки в несколько удалённых репозиториев и подготовки SSH `known_hosts`.
 
 [![CI](https://github.com/my-repositories/gitsync/actions/workflows/ci.yml/badge.svg)](https://github.com/my-repositories/gitsync/actions/workflows/ci.yml)
